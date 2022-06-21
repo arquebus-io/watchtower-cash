@@ -1,11 +1,17 @@
-version: "3"
+version: "3.8"
 services:
   postgres:
     image: "postgres:11.1-alpine"
     env_file:
       - .env_dev
-    expose:
-      - "5432"
+    ports:
+      - 5432:5432
+    restart: "always"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   redis:
     image: "redis:alpine"
     env_file:
@@ -17,6 +23,15 @@ services:
     ports:
       - "5672:5672"
     restart: on-failure
+  graphql-engine:
+    image: hasura/graphql-engine:v2.8.1
+    ports:
+    - "8080:8080"
+    depends_on:
+    - "postgres"
+    restart: always
+    env_file:
+      - .env_dev
   backend:
     build: .
     command: [ "supervisord", "-c", "/code/supervisor/webserver.conf", "--nodaemon" ]
@@ -24,9 +39,12 @@ services:
       - "80:8000"
     env_file:
       - .env_dev
+    links:
+      - postgres
     depends_on:
       - postgres
       - redis
       - rabbitmq
+      - graphql-engine
     volumes:
       - ./:/code
